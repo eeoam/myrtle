@@ -10,8 +10,6 @@ import Data.String.Interpolate ( i, iii )
 
 import System.Process.Typed
 
---import Segor.Types (Sending(..), Minting(..), Spending(..))
-
 cardano_cli, testnet :: Text
 cardano_cli = "/root/.local/bin/cardano-cli"
 testnet = "--testnet-magic 1097911063"
@@ -26,6 +24,79 @@ queryCmd addr =
     --address #{addr} 
     |]
 
+-- | Sending ADA 
+data Sending = Sending 
+    { tx_ins :: [ String ]
+    , tx_outs :: [ String ]
+    , expiry  :: Integer
+    , fee :: Integer
+    , out_file :: FilePath
+    } deriving Generic
+
+sending = Sending
+    { tx_ins = []
+    , tx_outs = []
+    , expiry = 0
+    , fee = 0
+    , out_file = "tx1.draft"
+    }
+
+sraw = sending
+    & #tx_ins .~ [ "1fb637d1bfcfc792cfbf9cb869249789e9aff4e7636f3531f9de449f25d180cf#0" ]
+    & #tx_outs .~ [ receiver ++ "+0", sender ++ "+0"]
+
+mkTxIn, mkTxOut :: String -> String
+mkTxIn txin = "--tx-in " <> txin <> " "
+mkTxOut txout = "--tx-out " <> txout <> " "
+-- #{mconcat $ map mkTxIn txsin}
+
+send :: Sending -> IO ExitCode
+send = runProcess . shell . sendCmd
+
+sendCmd :: Sending -> String
+sendCmd r = 
+    [iii|#{cardano_cli} transaction build-raw
+    --babbage-era
+    #{mconcat $ map mkTxIn $ r ^. #tx_ins}
+    #{mconcat $ map mkTxOut $ r ^. #tx_outs}
+    --invalid-hereafter #{show $ r ^. #expiry}
+    --fee #{show $ r ^. #fee}
+    --out-file #{r ^. #out_file}
+    |]
+
+-- | Calculating the minimum fee for a transaction
+data Costing = Costing 
+    { tx_file :: String 
+    , tx_in_count :: Integer
+    , tx_out_count :: Integer
+    , witness_count  :: Integer
+    } deriving Generic
+
+costing = Costing
+    { tx_file = "tx1.draft"
+    , tx_in_count = 0
+    , tx_out_count = 0
+    , witness_count = 0
+    } 
+
+cargz = costing
+    & #tx_in_count .~ 1
+    & #tx_out_count .~ 2
+    & #witness_count .~ 1
+
+cost :: Costing -> IO ExitCode
+cost = runProcess . shell . costCmd
+
+costCmd :: Costing -> String
+costCmd r = 
+    [iii|#{cardano_cli} transaction calculate-min-fee
+    #{testnet}
+    --protocol-params-file protocol-v1.json
+    --tx-body-file #{r ^. #tx_file}
+    --tx-in-count #{show $ r ^. #tx_in_count}
+    --tx-out-count #{show $ r ^. #tx_out_count}
+    --witness-count #{r ^. #witness_count}
+    |]
 
 --------------------------------------------------------------
 -- | sender is "/config/workspace/MyPrograms/swap-test/addr/seller.addr"
