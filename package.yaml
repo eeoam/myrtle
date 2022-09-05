@@ -1,0 +1,28 @@
+name: myrtle
+
+default-extensions:
+  - DuplicateRecordFields #must have indent
+  - OverloadedLabels
+  - DeriveGeneric
+  - OverloadedStrings
+  - QuasiQuotes
+
+dependencies:
+  - base
+  - microlens
+  - generic-lens
+  - text
+  - string-interpolate
+  - typed-process
+
+
+
+library:
+  source-dirs: src
+
+executables:
+  myrtle:
+    main: Main.hs
+    source-dirs: app
+    dependencies:
+      - myrtle
