@@ -14,6 +14,15 @@ cardano_cli, testnet :: Text
 cardano_cli = "/root/.local/bin/cardano-cli"
 testnet = "--testnet-magic 1097911063"
 
+-- | Query the current status of the testnet.
+
+query_testnet :: IO ExitCode
+query_testnet = runProcess . shell $
+    [iii|#{cardano_cli} query tip
+    #{testnet}
+    |]
+
+-- | Querying the UTxOs at an address.
 query :: String -> IO ExitCode
 query = runProcess . shell . queryCmd
 
@@ -24,26 +33,41 @@ queryCmd addr =
     --address #{addr} 
     |]
 
--- | Sending ADA 
+-- | Sending ADA.
 data Sending = Sending 
-    { tx_ins :: [ String ]
+    { balance, amt :: Integer
+    , tx_ins :: [ String ]
     , tx_outs :: [ String ]
-    , expiry  :: Integer
+    , current_slot, secs_valid  :: Integer
     , fee :: Integer
     , out_file :: FilePath
     } deriving Generic
 
 sending = Sending
-    { tx_ins = []
+    { balance = 0
+    , amt = 0
+    , tx_ins = []
     , tx_outs = []
-    , expiry = 0
+    , current_slot = 0
+    , secs_valid = 0
     , fee = 0
     , out_file = "tx1.draft"
     }
 
 sraw = sending
+    & #balance .~ 490425078
+    & #amt .~ 4000000
     & #tx_ins .~ [ "1fb637d1bfcfc792cfbf9cb869249789e9aff4e7636f3531f9de449f25d180cf#0" ]
     & #tx_outs .~ [ receiver ++ "+0", sender ++ "+0"]
+
+
+sr = sraw
+    & #fee .~ 174433
+    & #tx_outs .~ [ receiver ++ "+" ++ (show $ sr ^. #amt), sender ++ "+" ++ (show change)]
+    & #current_slot .~ 68036764 -- 2022.09.5:20:30
+    & #secs_valid .~ 16 * 60
+    where change = sr ^. #balance - (sr ^. #amt + sr ^. #fee)
+
 
 mkTxIn, mkTxOut :: String -> String
 mkTxIn txin = "--tx-in " <> txin <> " "
@@ -59,12 +83,12 @@ sendCmd r =
     --babbage-era
     #{mconcat $ map mkTxIn $ r ^. #tx_ins}
     #{mconcat $ map mkTxOut $ r ^. #tx_outs}
-    --invalid-hereafter #{show $ r ^. #expiry}
+    --invalid-hereafter #{show $ r ^. #current_slot + r ^. #secs_valid}
     --fee #{show $ r ^. #fee}
     --out-file #{r ^. #out_file}
     |]
 
--- | Calculating the minimum fee for a transaction
+-- | Calculating the minimum fee for a transaction.
 data Costing = Costing 
     { tx_file :: String 
     , tx_in_count :: Integer
@@ -105,3 +129,4 @@ sender_key = "/config/workspace/MyPrograms/swap-test/keys/seller.skey"
 
 -- | receiver = "/config/workspace/MyPrograms/swap-test/addr/buyer.addr"
 receiver = "addr_test1vpvwy3sadnsetnzygwlts2z6zx9qx8gpfffsdfr4gm4vnxscwv35d"
+
