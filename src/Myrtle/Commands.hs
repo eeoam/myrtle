@@ -107,6 +107,55 @@ costCmd r =
     --witness-count #{r ^. #witness_count}
     |]
 
+-- | Minting transaction.
+data Minting = Minting
+    { txin :: String
+    , tx_in_collateral :: String
+    , tx_out_addr :: String
+    , amt  :: Integer
+    , pid  :: String
+    , tkn  :: String
+    , script_file :: String
+    , redeemer_file :: String
+    , protocol_file :: String
+    , change_addr :: String
+    , tx_file :: String
+    } deriving (Show, Generic)
+
+minting = Minting
+      { txin = oref
+      , tx_in_collateral = oref
+      , tx_out_addr = ""
+      , amt = 1
+      , pid = "13605c02e123c3d57ec9e3880f5a5dc39b07cd1a3f6ee440755c9f15"
+      , tkn = "545354"
+      , script_file = "minting-policy-0.plutusV2"
+      , redeemer_file = "unit.json"
+      , change_addr = ""
+      , protocol_file = "protocol.json"
+      , tx_file = "tx.unsigned"
+      }
+      where oref = "c593486d715ee8962f6ea54bd0dd74e71e21b18100fef1e177e32f7471ae977e#0"
+
+mint :: Minting -> IO ExitCode
+mint = runProcess . shell . mintCmd
+
+mintCmd :: Minting -> String
+mintCmd r =
+    [iii|#{cardano_cli} transaction build
+    --babbage-era
+    --tx-in #{r ^. #txin}
+    --tx-in-collateral #{r ^. #tx_in_collateral}
+    --tx-out "#{r ^. #tx_out_addr} + 2000000 lovelace + #{show $ r ^. #amt} #{r ^. #pid}.#{r ^. #tkn}"
+    --mint "#{show $ r ^. #amt} #{r ^. #pid}.#{r ^. #tkn}"
+    --mint-script-file #{r ^. #script_file}
+    --mint-redeemer-file #{r ^. #redeemer_file}
+    --change-address #{r ^. #change_addr}
+    --protocol-params-file #{r ^. #protocol_file}
+    --#{testnet}
+    --out-file #{r ^. #tx_file}
+    |]
+
 -- | Signing and submitting a transaction.
 sign :: FilePath -> FilePath -> FilePath -> IO ExitCode
 sign skfile unsigned signed = (runProcess . shell) 
@@ -126,6 +175,8 @@ submit tx = runProcess $ shell
     --tx-file #{tx}
     |]
 
+--------------------------------------------------------------
+-- | Sending Ada example
 --------------------------------------------------------------
 -- | sender is "/config/workspace/MyPrograms/swap-test/addr/seller.addr"
 sender = "addr_test1vpra4fdvstljtkayvw069tq98q8nnly777d72vghnaxdr2qv068g5"
@@ -164,3 +215,25 @@ sr = sraw
 -- | *Myrtle.Commands> sign sender_key (sr ^. #out_file) "tx1.signed"
 -- | *Myrtle.Commands> submit "tx1.signed"
 
+--------------------------------------------------------------
+-- | Minting example.
+--------------------------------------------------------------
+minter = "addr_test1vpra4fdvstljtkayvw069tq98q8nnly777d72vghnaxdr2qv068g5"
+minter_key = "/config/workspace/MyPrograms/swap-test/keys/seller.skey"
+
+-- | *Myrtle.Commands> query minter
+
+mr = minting 
+    & #txin .~ "6a7fc863a31f5b2918921d86b757f22c3c0ee38b0cedfc4005d1463c9be8a7dc#0"
+    & #tx_in_collateral .~ (mr ^. #txin)
+    & #tx_out_addr .~ minter
+    & #change_addr .~ minter
+    & #amt .~ 3
+
+-- | *Myrtle.Commands> mint margz
+
+-- | *Myrtle.Commands> sign skfile "tx.unsigned" "tx.signed" 
+
+-- | *Myrtle.Commands> submit "tx.signed"
+
+-- | *Myrtle.Commands> query minter
